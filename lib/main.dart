@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'proxy_client.dart';
 
 void main() => runApp(const ChatLabApp());
 
@@ -9,18 +10,22 @@ class ChatLabApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        title: 'AI Chat — 실습 1·4',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2F6FE4)),
-          useMaterial3: true,
-        ),
-        home: const ChatPage(),
-      );
+    title: 'AI Chat — 실습 1·4',
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2F6FE4)),
+      useMaterial3: true,
+    ),
+    home: ChatPage(client: ProxyAiClient()),
+  );
 }
 
 class ChatMessage {
-  const ChatMessage({required this.text, required this.isUser, this.isError = false});
+  const ChatMessage({
+    required this.text,
+    required this.isUser,
+    this.isError = false,
+  });
   final String text;
   final bool isUser;
   final bool isError;
@@ -68,22 +73,19 @@ class ChatPage extends StatefulWidget {
   State<ChatPage> createState() => _ChatPageState();
 }
 
-class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin {
+class _ChatPageState extends State<ChatPage>
+    with SingleTickerProviderStateMixin {
   final _controller = TextEditingController();
   final _scroll = ScrollController();
   final _listKey = GlobalKey<AnimatedListState>();
-  final List<ChatMessage> _messages = [
-    const ChatMessage(text: '오늘 뭐 배워?', isUser: true),
-    const ChatMessage(text: 'AI 챗봇에 움직이는 응답을 붙입니다.', isUser: false),
-    const ChatMessage(text: '타이핑 점은 왜 필요해요?', isUser: true),
-    const ChatMessage(text: '응답이 1초를 넘으면 앱이 멈춘 것처럼 보이기 때문입니다.', isUser: false),
-  ];
+  final List<ChatMessage> _messages = [];
   late final AnimationController _dotsController;
   bool _sending = false;
   bool _typing = false;
   String? _error;
   String? _lastPrompt;
   int _rateRetries = 0;
+  ChatFailureKind? _lastFailure;
 
   @override
   void initState() {
@@ -91,7 +93,7 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
     _dotsController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
-    )..repeat();
+    );
   }
 
   @override
@@ -113,7 +115,7 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     initialItemCount: _messages.length,
                     itemBuilder: (context, index, animation) {
-                      final message = _messages[_messages.length - 1 - index];
+                      final message = _messages[index];
                       final duration = reduce
                           ? Duration.zero
                           : const Duration(milliseconds: 250);
@@ -140,7 +142,9 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
               ),
             ),
             AnimatedSwitcher(
-              duration: reduce ? Duration.zero : const Duration(milliseconds: 200),
+              duration: reduce
+                  ? Duration.zero
+                  : const Duration(milliseconds: 200),
               child: _error == null
                   ? const SizedBox.shrink()
                   : _ErrorBubble(message: _error!, onRetry: _retry),
@@ -187,34 +191,50 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
       _sending = true;
       _typing = true;
       if (!isRetry) {
-        _messages.add(ChatMessage(text: text, isUser: true));
+        _messages.insert(0, ChatMessage(text: text, isUser: true));
         _controller.clear();
       }
     });
     if (!isRetry) {
-      _listKey.currentState?.insertItem(_messages.length - 1, duration: MediaQuery.of(context).disableAnimations ? Duration.zero : const Duration(milliseconds: 250));
+      _listKey.currentState?.insertItem(
+        0,
+        duration: MediaQuery.of(context).disableAnimations
+            ? Duration.zero
+            : const Duration(milliseconds: 250),
+      );
       _toBottom();
     }
     try {
-      if (isRetry && text == '/429') {
-        await Future<void>.delayed(Duration(seconds: _rateRetries++ == 0 ? 1 : 2));
+      if (!MediaQuery.of(context).disableAnimations) _dotsController.repeat();
+      if (isRetry && _lastFailure == ChatFailureKind.rateLimited) {
+        await Future<void>.delayed(
+          Duration(seconds: _rateRetries++ == 0 ? 1 : 2),
+        );
         if (!mounted) return;
       }
       final answer = await widget.client.chat(text);
       if (!mounted) return;
       setState(() {
-        _messages.add(ChatMessage(text: answer, isUser: false));
+        _messages.insert(0, ChatMessage(text: answer, isUser: false));
         _typing = false;
       });
-      _listKey.currentState?.insertItem(_messages.length - 1, duration: MediaQuery.of(context).disableAnimations ? Duration.zero : const Duration(milliseconds: 250));
+      _lastFailure = null;
+      _listKey.currentState?.insertItem(
+        0,
+        duration: MediaQuery.of(context).disableAnimations
+            ? Duration.zero
+            : const Duration(milliseconds: 250),
+      );
       _toBottom();
     } on ChatFailure catch (failure) {
+      _lastFailure = failure.kind;
       if (!mounted) return;
       setState(() {
         _error = _failureMessage(failure);
         _typing = false;
       });
     } finally {
+      _dotsController.stop();
       if (mounted) setState(() => _sending = false);
     }
   }
@@ -222,19 +242,22 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
   Future<void> _retry() => _send(prompt: _lastPrompt, isRetry: true);
 
   String _failureMessage(ChatFailure failure) => switch (failure.kind) {
-        ChatFailureKind.unauthorized => '키/권한을 확인해 주세요',
-        ChatFailureKind.rateLimited => '잠시 후 다시 시도해 주세요',
-        ChatFailureKind.server => '응답을 받지 못했습니다',
-        ChatFailureKind.timeout => '네트워크를 확인해 주세요',
-        ChatFailureKind.network => '네트워크를 확인해 주세요',
-      };
+    ChatFailureKind.unauthorized => '키/권한을 확인해 주세요',
+    ChatFailureKind.rateLimited => '잠시 후 다시 시도해 주세요',
+    ChatFailureKind.server => '응답을 받지 못했습니다',
+    ChatFailureKind.timeout => '네트워크를 확인해 주세요',
+    ChatFailureKind.network => '네트워크를 확인해 주세요',
+  };
 
   void _toBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       if (_scroll.hasClients) {
         _scroll.animateTo(
           0,
-          duration: MediaQuery.of(context).disableAnimations ? Duration.zero : const Duration(milliseconds: 200),
+          duration: MediaQuery.of(context).disableAnimations
+              ? Duration.zero
+              : const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         );
       }
@@ -268,8 +291,8 @@ class _Bubble extends StatelessWidget {
           color: message.isError
               ? colors.errorContainer
               : message.isUser
-                  ? colors.primaryContainer
-                  : colors.surfaceContainerHighest,
+              ? colors.primaryContainer
+              : colors.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Text(message.text),
@@ -279,7 +302,11 @@ class _Bubble extends StatelessWidget {
 }
 
 class _TypingDots extends StatelessWidget {
-  const _TypingDots({super.key, required this.controller, required this.reduceMotion});
+  const _TypingDots({
+    super.key,
+    required this.controller,
+    required this.reduceMotion,
+  });
   final Animation<double> controller;
   final bool reduceMotion;
 
@@ -298,10 +325,9 @@ class _TypingDots extends StatelessWidget {
               child: Text(
                 '●',
                 style: TextStyle(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .primary
-                      .withValues(alpha: index <= active ? 1 : .25),
+                  color: Theme.of(context).colorScheme.primary.withValues(
+                    alpha: index <= active ? 1 : .25,
+                  ),
                   fontSize: 12,
                 ),
               ),
@@ -320,17 +346,17 @@ class _ErrorBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.errorContainer,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Row(
-          children: [
-            Expanded(child: Text(message)),
-            TextButton(onPressed: onRetry, child: const Text('다시 시도')),
-          ],
-        ),
-      );
+    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.errorContainer,
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: Row(
+      children: [
+        Expanded(child: Text(message)),
+        TextButton(onPressed: onRetry, child: const Text('다시 시도')),
+      ],
+    ),
+  );
 }
