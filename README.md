@@ -1,56 +1,44 @@
-# 실습 1 — 채팅 UI (GAI3008-01 · 11주차)
+# 11주차 과제 — AI Chat (GAI3008-01)
 
-> 목표: **보내고 받는 모양**을 먼저 만든다. API는 다음 실습에서 붙인다.
-> 이 저장소는 **할 일 1번만 완성**되어 있고, 2~5번은 코드 안의 `TODO` 주석으로 안내한다.
+실습 1 채팅 UI와 실습 4 오류·재시도를 개인 구현한 저장소입니다.
 
 ## 실행
 
 ```bash
 flutter pub get
-flutter run -d chrome      # 또는 -d <에뮬레이터>
+flutter run -d chrome
 ```
 
-서버가 필요 없다. `_messages`에 들어 있는 가짜 대화로 화면만 만든다.
+외부 API key 없이 실행됩니다. 테스트용 입력은 `/401`, `/429`, `/500`, `/timeout`, `/network`이며, 일반 문장은 mock AI가 응답합니다.
 
-## 할 일
+## 구현 체크리스트
 
-| # | 내용 | 상태 |
+- [x] 사용자/AI 말풍선 좌우 정렬
+- [x] 빈 상태 `무엇이든 물어보세요`
+- [x] 입력창·전송 버튼·키보드 대응
+- [x] sending/typing/done/error 흐름
+- [x] 타이핑 점 3개와 `AnimatedList` 250ms 삽입
+- [x] 401/429/500/timeout 오류와 다시 시도
+- [x] 429 retry 1초 backoff
+- [x] Reduce Motion에서 애니메이션만 비활성화
+
+## 화면 증거
+
+실행 후 개선된 화면 캡처 또는 GIF를 아래 위치에 추가합니다.
+
+`docs/evidence/chat-ui.png` 또는 `docs/evidence/chat-demo.gif`
+
+## 단계별 커밋
+
+| 단계 | 내용 | 커밋 |
 |---|---|---|
-| 1 | `ListView.builder` + `reverse: true` — 최신이 아래 | ✅ **완성됨** |
-| 2 | 말풍선 2종 — 사용자 오른쪽 / AI 왼쪽 | ⬜ `TODO 2` |
-| 3 | 입력창 `TextField` + 전송 버튼 | ⬜ `TODO 3` |
-| 4 | 빈 상태 — "무엇이든 물어보세요" | ⬜ `TODO 4` |
-| 5 | 키보드가 입력창을 가리지 않게 | ⬜ `TODO 5` |
-
-`lib/main.dart`에서 `TODO 2`~`TODO 5`를 검색하면 해당 위치로 바로 간다.
-
-## 완료 기준 (수업 중 통과)
-
-- 말풍선이 **좌우로** 나뉜다
-- 입력창이 화면 **아래**에 붙어 있다
-- 목록이 비면 **빈 상태 문구**가 보인다
-- 키보드가 올라와도 입력창이 **가려지지 않는다**
-
-## 힌트
-
-- `reverse: true`면 index 0이 **화면 맨 아래**다. 그래서 `_messages[length - 1 - i]`로 꺼낸다.
-- 색은 `Theme.of(context).colorScheme`에서 꺼내면 다크 모드에서도 안전하다.
-- `TextEditingController`는 `dispose()`에서 정리한다.
-- `ListView`를 `Stack`으로 감싸면 빈 상태를 위에 겹칠 수 있다.
-
-## 구조
-
-```
-lib/main.dart          ← 실습 파일 (TODO 2~5)
-test/widget_test.dart  ← 앱이 뜨는지 확인하는 스모크 테스트
-```
+| 1 | 채팅 UI 완성 | `feat: complete chat ui lab 1` |
+| 2 | 상태·애니메이션·오류·재시도 | `feat: add chatbot states and animated replies` |
+| 3 | 제출 기록·검증 | `feat: add error retry and assignment evidence` |
 
 ## 제출
 
-- 이 저장소를 `fork` → 브랜치 `feat/내이름-chat`
-- 커밋 2개 이상, PR 1개
-- PR 본문 3줄: 무엇 · 왜 · 시험
-
----
-
-ⓒ 2026 Baryon Labs · 연세대학교 GAI3008-01 응용모바일프로그래밍 교육자료
+- 저장소 URL
+- 커밋 목록 URL: `/commits/main/`
+- `docs/w11.md` 5칸 기록
+- 개선된 화면 캡처 또는 GIF
