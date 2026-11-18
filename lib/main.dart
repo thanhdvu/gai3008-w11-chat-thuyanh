@@ -83,6 +83,7 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
   bool _typing = false;
   String? _error;
   String? _lastPrompt;
+  int _rateRetries = 0;
 
   @override
   void initState() {
@@ -180,6 +181,7 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
     final text = (prompt ?? _controller.text).trim();
     if (text.isEmpty) return;
     _lastPrompt = text;
+    if (!isRetry) _rateRetries = 0;
     setState(() {
       _error = null;
       _sending = true;
@@ -190,12 +192,13 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
       }
     });
     if (!isRetry) {
-      _listKey.currentState?.insertItem(_messages.length - 1);
+      _listKey.currentState?.insertItem(_messages.length - 1, duration: MediaQuery.of(context).disableAnimations ? Duration.zero : const Duration(milliseconds: 250));
       _toBottom();
     }
     try {
       if (isRetry && text == '/429') {
-        await Future<void>.delayed(const Duration(seconds: 1));
+        await Future<void>.delayed(Duration(seconds: _rateRetries++ == 0 ? 1 : 2));
+        if (!mounted) return;
       }
       final answer = await widget.client.chat(text);
       if (!mounted) return;
@@ -203,7 +206,7 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
         _messages.add(ChatMessage(text: answer, isUser: false));
         _typing = false;
       });
-      _listKey.currentState?.insertItem(_messages.length - 1);
+      _listKey.currentState?.insertItem(_messages.length - 1, duration: MediaQuery.of(context).disableAnimations ? Duration.zero : const Duration(milliseconds: 250));
       _toBottom();
     } on ChatFailure catch (failure) {
       if (!mounted) return;
@@ -229,10 +232,9 @@ class _ChatPageState extends State<ChatPage> with SingleTickerProviderStateMixin
   void _toBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
-        _scroll.jumpTo(0);
         _scroll.animateTo(
           0,
-          duration: const Duration(milliseconds: 200),
+          duration: MediaQuery.of(context).disableAnimations ? Duration.zero : const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         );
       }

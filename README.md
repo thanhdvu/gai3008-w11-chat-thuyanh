@@ -19,14 +19,14 @@ flutter run -d chrome
 - [x] sending/typing/done/error 흐름
 - [x] 타이핑 점 3개와 `AnimatedList` 250ms 삽입
 - [x] 401/429/500/timeout 오류와 다시 시도
-- [x] 429 retry 1초 backoff
+- [x] 429 retry 지수 backoff 1초 → 2초
 - [x] Reduce Motion에서 애니메이션만 비활성화
 
 ## 화면 증거
 
-실행 후 개선된 화면 캡처 또는 GIF를 아래 위치에 추가합니다.
+Flutter 위젯을 실제 렌더링한 화면입니다 (자동 캡처).
 
-`docs/evidence/chat-ui.png` 또는 `docs/evidence/chat-demo.gif`
+![채팅 UI](docs/evidence/chat-ui.png)
 
 ## 단계별 커밋
 
