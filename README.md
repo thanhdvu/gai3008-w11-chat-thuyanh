@@ -6,10 +6,18 @@
 
 ```bash
 flutter pub get
+node proxy/server.mjs
+# 새 터미널:
 flutter run -d chrome
 ```
 
-외부 API key 없이 실행됩니다. 테스트용 입력은 `/401`, `/429`, `/500`, `/timeout`, `/network`이며, 일반 문장은 mock AI가 응답합니다.
+외부 API key 없이 앱 → HTTP proxy → MOCK 응답으로 실행됩니다. `/401`, `/429`, `/500`, `/timeout`은 첫 요청에서 실패하고 같은 메시지를 다시 시도하면 성공합니다. `/timeout`은 실제로 30초 뒤 앱에서 timeout 처리됩니다. 서버 재시작으로 테스트 기록을 초기화합니다.
+
+Android 에뮬레이터: `flutter run --dart-define=CHAT_BASE=http://10.0.2.2:8787`
+
+서버 전체 오류 테스트 (PowerShell): `$env:FORCE_STATUS='429'; node proxy/server.mjs` (종료 후 환경변수 제거). `SLOW_MS`로 응답 지연을 설정할 수 있습니다. 실제 AI 연결 및 키는 이번 mock 실행에 필요하지 않습니다.
+
+앱은 빈 대화에서 시작합니다. 429 오류 후 수동 재시도는 첫 번째 1초, 그다음 2초 대기합니다. 운영체제 Reduce Motion 설정을 따릅니다.
 
 ## 구현 체크리스트
 
